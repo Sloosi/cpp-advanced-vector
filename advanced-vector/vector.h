@@ -18,14 +18,14 @@ public:
         capacity_(capacity)
     {}
 
-    RawMemory(RawMemory&& other) noexcept : 
-        buffer_(std::move(other.buffer_)),
-        capacity_(std::move(other.capacity_))
-    {}
+    RawMemory(RawMemory&& other) noexcept {
+        Swap(other);
+    }
 
     RawMemory<T>& operator=(RawMemory&& rhs) noexcept {
-        buffer_ = std::move(rhs.buffer_);
-        capacity_ = std::move(rhs.capacity_);
+        if (this != &rhs) {
+            Swap(rhs);
+        }
 
         return *this;
     }
@@ -118,18 +118,22 @@ public:
                 Vector<T> rhs_copy(rhs);
                 Swap(rhs_copy);
             }
-            else {
+
+            if (rhs.size_ <= data_.Capacity()) {
+                std::copy(rhs.data_.GetAddress(), rhs.data_.GetAddress() + std::min(size_, rhs.size_), data_.GetAddress());
+                
                 if (size_ > rhs.size_) {
-                    std::copy(rhs.data_.GetAddress(), rhs.data_.GetAddress() + rhs.size_, data_.GetAddress());
                     std::destroy_n(data_.GetAddress() + rhs.size_, size_ - rhs.size_);
                 }
                 else {
-                    std::copy(rhs.data_.GetAddress(), rhs.data_.GetAddress() + size_, data_.GetAddress());
                     std::uninitialized_copy_n(rhs.data_.GetAddress() + size_, rhs.size_ - size_, data_.GetAddress() + size_);
                 }
+                
                 size_ = rhs.size_;
             }
+
         }
+
         return *this;
     }
 
@@ -202,19 +206,7 @@ public:
 
     template <typename... Args>
     T& EmplaceBack(Args&&... args) {
-        T* result = nullptr;
-        if (size_ == Capacity()) {
-            RawMemory<T> new_data(size_ == 0 ? 1 : size_ * 2);
-            result = new (new_data + size_) T(std::forward<Args>(args)...);
-            UninitializedConstructN(data_.GetAddress(), size_, new_data.GetAddress());
-            std::destroy_n(data_.GetAddress(), size_);
-            data_.Swap(new_data);
-        }
-        else {
-            result = new (data_ + size_) T(std::forward<Args>(args)...);
-        }
-        ++size_;
-        return *result;
+        return *Emplace(end(), std::forward<Args>(args)...);
     }
 
     void PopBack() noexcept {
